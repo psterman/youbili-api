@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // 显示详细加载状态
             updateLoadingStatus('正在连接API服务...');
 
+            // 添加通知
+            showNotification('由于API服务暂时不可用，正在使用备用下载服务', 'warning');
+
             // 获取视频信息
             const videoInfo = await getVideoInfo(url);
 
@@ -149,9 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoInfo.apiSource === '直接下载服务') {
             const directServiceNote = document.createElement('div');
             directServiceNote.className = 'direct-service-note';
-            directServiceNote.innerHTML = `
-                <p><strong>注意:</strong> 当前使用直接下载服务模式。点击下载按钮将跳转到第三方下载网站。</p>
-            `;
+            directServiceNote.textContent = '注意：由于API暂不可用，我们提供了第三方下载服务链接。点击链接将跳转到相应的下载网站。';
             downloadLinks.appendChild(directServiceNote);
         }
 
@@ -437,4 +438,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 添加提示信息
     videoUrlInput.placeholder = '粘贴 YouTube 或 B站 视频链接...';
+
+    // 添加一个通知函数
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+
+        // 添加到页面
+        const container = document.querySelector('.container') || document.body;
+        container.insertBefore(notification, container.firstChild);
+
+        // 5秒后自动消失
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 500);
+        }, 5000);
+    }
 }); 
