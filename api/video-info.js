@@ -53,50 +53,173 @@ function extractBilibiliVideoId(url) {
 
 // 获取YouTube视频信息
 async function getYouTubeVideoInfo(videoId) {
-    // 简化版，直接返回固定格式
-    return {
-        id: videoId,
-        title: `YouTube视频 (ID: ${videoId})`,
-        uploader: 'YouTube',
-        formats: [
-            {
-                quality: '高清 (720p)',
-                format: 'mp4',
-                size: '自动检测',
-                url: `https://www.y2mate.com/youtube/${videoId}`
-            },
-            {
-                quality: '超清 (1080p)',
-                format: 'mp4',
-                size: '自动检测',
-                url: `https://9xbuddy.org/download?url=https://www.youtube.com/watch?v=${videoId}`
+    try {
+        // 使用 y2mate API 获取视频信息
+        const apiUrl = `https://www.y2mate.com/mates/analyzeV2/ajax`;
+
+        const formData = new URLSearchParams();
+        formData.append('k_query', `https://www.youtube.com/watch?v=${videoId}`);
+        formData.append('k_page', 'home');
+        formData.append('hl', 'en');
+        formData.append('q_auto', '0');
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': 'https://www.y2mate.com',
+                'Referer': 'https://www.y2mate.com/'
             }
-        ]
-    };
+        });
+
+        if (!response.ok) {
+            throw new Error('Y2mate API请求失败');
+        }
+
+        const data = await response.json();
+
+        if (!data.links || !data.links.mp4) {
+            throw new Error('Y2mate未返回有效的下载链接');
+        }
+
+        // 提取视频信息
+        const title = data.title || `YouTube视频 ${videoId}`;
+        const thumbnail = data.thumbnail || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+
+        // 提取MP4格式的下载链接
+        const formats = [];
+        const mp4Links = data.links.mp4;
+
+        Object.keys(mp4Links).forEach(key => {
+            const item = mp4Links[key];
+            if (item.f === 'mp4') {
+                formats.push({
+                    quality: item.q || '未知',
+                    format: 'mp4',
+                    size: item.size || '未知',
+                    url: item.url || ''
+                });
+            }
+        });
+
+        return {
+            id: videoId,
+            title: title,
+            uploader: data.a || 'YouTube',
+            thumbnail: thumbnail,
+            formats: formats
+        };
+    } catch (error) {
+        console.error('获取YouTube视频信息失败:', error);
+
+        // 返回备用下载链接
+        return {
+            id: videoId,
+            title: `YouTube视频 ${videoId}`,
+            uploader: 'YouTube',
+            formats: [
+                {
+                    quality: '高清 (720p)',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://www.y2mate.com/youtube/${videoId}`
+                },
+                {
+                    quality: '超清 (1080p)',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://9xbuddy.org/download?url=https://www.youtube.com/watch?v=${videoId}`
+                },
+                {
+                    quality: '原始质量',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://ssyoutube.com/watch?v=${videoId}`
+                }
+            ]
+        };
+    }
 }
 
 // 获取B站视频信息
 async function getBilibiliVideoInfo(videoId) {
-    // 简化版，直接返回固定格式
-    return {
-        id: videoId,
-        title: `B站视频 (ID: ${videoId})`,
-        uploader: 'B站UP主',
-        formats: [
-            {
-                quality: '高清',
-                format: 'mp4',
-                size: '自动检测',
-                url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`
-            },
-            {
-                quality: '原始质量',
-                format: 'mp4',
-                size: '自动检测',
-                url: `https://bili.iiilab.com/?bvid=${videoId}`
+    try {
+        // 使用第三方 API
+        const apiUrl = `https://api.injahow.cn/bparse/?url=https://www.bilibili.com/video/${videoId}&type=mp4`;
+
+        const response = await fetch(apiUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-        ]
-    };
+        });
+
+        if (!response.ok) {
+            throw new Error('获取B站视频信息失败');
+        }
+
+        const data = await response.json();
+
+        if (!data.data || !data.data.durl) {
+            throw new Error('未返回有效的下载链接');
+        }
+
+        // 提取视频信息
+        const title = data.title || `B站视频 ${videoId}`;
+        const uploader = data.author || 'B站UP主';
+
+        // 提取下载链接
+        const formats = data.data.durl.map((item, index) => {
+            let quality = '未知';
+            if (index === 0) quality = '高清';
+            else if (index === 1) quality = '标清';
+
+            return {
+                quality,
+                format: 'mp4',
+                size: '未知',
+                url: item.url
+            };
+        });
+
+        return {
+            id: videoId,
+            title,
+            uploader,
+            formats
+        };
+    } catch (error) {
+        console.error('获取B站视频信息失败:', error);
+
+        // 返回备用下载链接
+        return {
+            id: videoId,
+            title: `B站视频 ${videoId}`,
+            uploader: 'B站UP主',
+            formats: [
+                {
+                    quality: '高清',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`
+                },
+                {
+                    quality: '原始质量',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://bili.iiilab.com/?bvid=${videoId}`
+                },
+                {
+                    quality: '标清',
+                    format: 'mp4',
+                    size: '自动检测',
+                    url: `https://injahow.com/bparse/?url=https://www.bilibili.com/video/${videoId}`
+                }
+            ]
+        };
+    }
 }
 
 // API处理函数
@@ -117,6 +240,8 @@ module.exports = async (req, res) => {
     if (!url) {
         return res.status(400).json({ error: '请提供视频URL' });
     }
+
+    console.log('处理视频URL:', url);
 
     try {
         // 检测平台

@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateLoadingStatus('正在连接API服务...');
 
             // 添加通知
-            showNotification('由于API服务暂时不可用，正在使用备用下载服务', 'warning');
+            showNotification('正在尝试使用 Vercel API 获取下载链接，如果失败将使用备用下载服务', 'info');
 
             // 获取视频信息
             const videoInfo = await getVideoInfo(url);
@@ -152,8 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoInfo.apiSource === '直接下载服务') {
             const directServiceNote = document.createElement('div');
             directServiceNote.className = 'direct-service-note';
-            directServiceNote.textContent = '注意：由于API暂不可用，我们提供了第三方下载服务链接。点击链接将跳转到相应的下载网站。';
+            directServiceNote.textContent = '注意：由于 Vercel API 暂时不可用，我们提供了第三方下载服务链接。点击链接将跳转到相应的下载网站。';
             downloadLinks.appendChild(directServiceNote);
+        } else if (videoInfo.apiSource === 'Vercel API') {
+            showNotification('成功使用 Vercel API 获取下载链接', 'success');
         }
 
         // 添加下载选项
