@@ -3,8 +3,8 @@
 import { fallbackYouTubeDownload } from './youtube.js';
 import { fallbackBilibiliDownload } from './bilibili.js';
 
-// Vercel API端点 - 使用根目录部署的API
-const VERCEL_API_ENDPOINT = 'https://youbili.vercel.app/api/video-info';
+// Vercel API端点 - 使用您成功部署的API端点
+const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
 
 // 视频信息API
 export async function getVideoInfo(url) {
@@ -21,11 +21,25 @@ export async function getVideoInfo(url) {
 
             const response = await fetch(apiUrl);
             console.log('API响应状态:', response.status);
+            console.log('API响应头:', JSON.stringify([...response.headers.entries()]));
+
+            // 检查响应类型
+            const contentType = response.headers.get('content-type');
+            console.log('响应内容类型:', contentType);
 
             if (!response.ok) {
+                // 获取错误响应文本
                 const errorText = await response.text();
-                console.error('Vercel API请求失败:', errorText);
-                throw new Error(`API请求失败: ${response.status}`);
+                console.error('Vercel API请求失败, 状态码:', response.status);
+                console.error('错误响应内容:', errorText);
+                throw new Error(`API请求失败: ${response.status}, 内容: ${errorText.substring(0, 100)}...`);
+            }
+
+            // 检查是否是JSON响应
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('API返回了非JSON格式:', text.substring(0, 100));
+                throw new Error('API返回了非JSON格式');
             }
 
             const data = await response.json();
@@ -41,7 +55,9 @@ export async function getVideoInfo(url) {
             // 如果没有返回有效数据，抛出错误
             throw new Error('Vercel API未返回有效的下载链接');
         } catch (apiError) {
-            console.error('Vercel API调用失败，使用备用方法:', apiError);
+            console.error('Vercel API调用失败，详细错误:', apiError);
+            console.error('错误堆栈:', apiError.stack);
+            console.log('使用备用方法获取下载链接');
 
             // 使用备用方法
             if (isYouTubeUrl(url)) {
@@ -64,6 +80,7 @@ export async function getVideoInfo(url) {
         }
     } catch (error) {
         console.error('获取视频信息失败:', error);
+        console.error('错误堆栈:', error.stack);
 
         // 尝试使用备用方法
         console.log('尝试使用备用方法获取下载链接');

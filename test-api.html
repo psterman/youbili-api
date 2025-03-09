@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>API测试</h1>
+
+    <div class="form-group">
+        <label for="apiUrl">API端点:</label>
+        <input type="text" id="apiUrl" value="https://youbili-api.vercel.app/api/video-info">
+    </div>
+
+    <div class="form-group">
+        <label for="videoUrl">视频链接:</label>
+        <input type="text" id="videoUrl" placeholder="输入YouTube或B站视频链接"
+            value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+    </div>
+
+    <button id="testBtn">测试API</button>
+    <button id="clearBtn">清除日志</button>
+
+    <div id="result"></div>
+
+    <h3>调试日志:</h3>
+    <div id="log"></div>
+
+    <script>
+        // 日志函数
+        function log(message, isError = false) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${time}] ${message}`;
+            if (isError) {
+                logEntry.style.color = 'red';
+            }
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // 测试API
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const videoUrl = document.getElementById('videoUrl').value.trim();
+            const resultDiv = document.getElementById('result');
+
+            if (!apiUrl || !videoUrl) {
+                resultDiv.textContent = '请输入API端点和视频链接';
+                return;
+            }
+
+            resultDiv.textContent = '正在获取视频信息...';
+            log(`开始请求: ${apiUrl}?url=${encodeURIComponent(videoUrl)}`);
+
+            try {
+                const fullUrl = `${apiUrl}?url=${encodeURIComponent(videoUrl)}`;
+                log(`完整请求URL: ${fullUrl}`);
+
+                const response = await fetch(fullUrl);
+                log(`响应状态: ${response.status} ${response.statusText}`);
+
+                // 记录响应头
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    headers[key] = value;
+                });
+                log(`响应头: ${JSON.stringify(headers, null, 2)}`);
+
+                // 检查内容类型
+                const contentType = response.headers.get('content-type');
+                log(`内容类型: ${contentType}`);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`错误响应: ${errorText.substring(0, 200)}...`, true);
+                    resultDiv.textContent = `错误: ${response.status} ${response.statusText}\n${errorText.substring(0, 200)}...`;
+                    return;
+                }
+
+                // 尝试解析JSON
+                try {
+                    const text = await response.text();
+                    log(`响应文本: ${text.substring(0, 200)}...`);
+
+                    const data = JSON.parse(text);
+                    log(`解析JSON成功`);
+
+                    resultDiv.textContent = JSON.stringify(data, null, 2);
+                } catch (parseError) {
+                    log(`JSON解析错误: ${parseError.message}`, true);
+                    resultDiv.textContent = `JSON解析错误: ${parseError.message}`;
+                }
+            } catch (error) {
+                log(`请求错误: ${error.message}`, true);
+                resultDiv.textContent = `错误: ${error.message}`;
+            }
+        });
+
+        // 清除日志
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('log').innerHTML = '';
+        });
+    </script>
+</body>
+
+</html>
