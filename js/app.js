@@ -145,6 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         downloadLinks.appendChild(videoInfoElement);
 
+        // 添加直接下载服务提示
+        if (videoInfo.apiSource === '直接下载服务') {
+            const directServiceNote = document.createElement('div');
+            directServiceNote.className = 'direct-service-note';
+            directServiceNote.innerHTML = `
+                <p><strong>注意:</strong> 当前使用直接下载服务模式。点击下载按钮将跳转到第三方下载网站。</p>
+            `;
+            downloadLinks.appendChild(directServiceNote);
+        }
+
         // 添加下载选项
         if (videoInfo.formats && videoInfo.formats.length > 0) {
             // 过滤掉无效URL

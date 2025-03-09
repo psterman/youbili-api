@@ -3,44 +3,65 @@
 import { fallbackYouTubeDownload } from './youtube.js';
 import { fallbackBilibiliDownload } from './bilibili.js';
 
-// Vercel API端点 - 部署后替换为您的实际URL
-const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
+// Vercel API端点 - 使用根目录部署的API
+const VERCEL_API_ENDPOINT = 'https://youbili.vercel.app/api/video-info';
 
 // 视频信息API
 export async function getVideoInfo(url) {
     try {
-        // 调用Vercel API
-        const apiUrl = `${VERCEL_API_ENDPOINT}?url=${encodeURIComponent(url)}`;
+        console.log('正在处理视频链接:', url);
 
-        console.log('正在请求Vercel API:', apiUrl);
+        // 尝试使用Vercel API
+        try {
+            console.log('正在请求Vercel API:', VERCEL_API_ENDPOINT);
 
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || '获取视频信息失败');
-        }
+            // 调用Vercel API
+            const apiUrl = `${VERCEL_API_ENDPOINT}?url=${encodeURIComponent(url)}`;
+            console.log('完整API请求URL:', apiUrl);
 
-        const data = await response.json();
+            const response = await fetch(apiUrl);
+            console.log('API响应状态:', response.status);
 
-        // 如果没有获取到格式信息，尝试使用备用方法
-        if (!data.formats || data.formats.length === 0) {
-            console.log('Vercel API未返回有效的下载链接，尝试使用备用方法');
-
-            if (isYouTubeUrl(url)) {
-                const videoId = extractYouTubeVideoId(url);
-                if (videoId) {
-                    return await fallbackYouTubeDownload(videoId);
-                }
-            } else if (isBilibiliUrl(url)) {
-                const videoId = extractBilibiliVideoId(url);
-                if (videoId) {
-                    return await fallbackBilibiliDownload(videoId);
-                }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Vercel API请求失败:', errorText);
+                throw new Error(`API请求失败: ${response.status}`);
             }
-            throw new Error('无法获取视频下载链接');
-        }
 
-        return data;
+            const data = await response.json();
+            console.log('Vercel API返回数据:', data);
+
+            // 如果API返回了有效数据
+            if (data && data.formats && data.formats.length > 0) {
+                // 添加API来源信息
+                data.apiSource = 'Vercel API';
+                return data;
+            }
+
+            // 如果没有返回有效数据，抛出错误
+            throw new Error('Vercel API未返回有效的下载链接');
+        } catch (apiError) {
+            console.error('Vercel API调用失败，使用备用方法:', apiError);
+
+            // 使用备用方法
+            if (isYouTubeUrl(url)) {
+                console.log('检测到YouTube链接，使用备用下载服务');
+                const videoId = extractYouTubeVideoId(url);
+                if (!videoId) {
+                    throw new Error('无法识别YouTube视频ID，请确保链接格式正确');
+                }
+                return await getYouTubeDirectLinks(videoId);
+            } else if (isBilibiliUrl(url)) {
+                console.log('检测到B站链接，使用备用下载服务');
+                const videoId = extractBilibiliVideoId(url);
+                if (!videoId) {
+                    throw new Error('无法识别B站视频ID，请确保链接格式正确');
+                }
+                return await getBilibiliDirectLinks(videoId);
+            } else {
+                throw new Error('不支持的视频平台，目前仅支持YouTube和B站');
+            }
+        }
     } catch (error) {
         console.error('获取视频信息失败:', error);
 
@@ -63,35 +84,70 @@ export async function getVideoInfo(url) {
     }
 }
 
-// 生成下载链接API
-export async function generateDownloadLink(url, quality) {
-    try {
-        // 判断视频平台
-        if (isYouTubeUrl(url)) {
-            const videoId = extractYouTubeVideoId(url);
-            if (!videoId) {
-                throw new Error('无法识别YouTube视频ID');
-            }
-            return await generateYouTubeDownloadLink(videoId, quality);
-        } else if (isBilibiliUrl(url)) {
-            // 处理B站短链接
-            if (url.includes('b23.tv')) {
-                const resolved = await resolveBilibiliShortLink(url);
-                url = resolved.resolvedUrl;
-            }
-
-            const videoId = extractBilibiliVideoId(url);
-            if (!videoId) {
-                throw new Error('无法识别B站视频ID');
-            }
-            return await generateBilibiliDownloadLink(videoId, quality);
-        } else {
-            throw new Error('不支持的视频平台');
+// 获取YouTube直接下载链接
+async function getYouTubeDirectLinks(videoId) {
+    // 创建直接下载链接
+    const formats = [
+        {
+            quality: '高清 (720p)',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://www.y2mate.com/youtube/${videoId}`
+        },
+        {
+            quality: '超清 (1080p)',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://9xbuddy.org/download?url=https://www.youtube.com/watch?v=${videoId}`
+        },
+        {
+            quality: '原始质量',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://ssyoutube.com/watch?v=${videoId}`
         }
-    } catch (error) {
-        console.error('生成下载链接时出错:', error);
-        throw error;
-    }
+    ];
+
+    return {
+        id: videoId,
+        title: `YouTube视频 (ID: ${videoId})`,
+        uploader: 'YouTube',
+        formats: formats,
+        apiSource: '直接下载服务'
+    };
+}
+
+// 获取B站直接下载链接
+async function getBilibiliDirectLinks(videoId) {
+    // 创建直接下载链接
+    const formats = [
+        {
+            quality: '高清',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`
+        },
+        {
+            quality: '原始质量',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://bili.iiilab.com/?bvid=${videoId}`
+        },
+        {
+            quality: '标清',
+            format: 'mp4',
+            size: '自动检测',
+            url: `https://injahow.com/bparse/?url=https://www.bilibili.com/video/${videoId}`
+        }
+    ];
+
+    return {
+        id: videoId,
+        title: `B站视频 (ID: ${videoId})`,
+        uploader: 'B站UP主',
+        formats: formats,
+        apiSource: '直接下载服务'
+    };
 }
 
 // 辅助函数：检查是否为YouTube链接
