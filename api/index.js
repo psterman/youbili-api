@@ -4,7 +4,7 @@ import { fallbackYouTubeDownload } from './youtube.js';
 import { fallbackBilibiliDownload } from './bilibili.js';
 
 // Vercel API端点 - 部署后替换为您的实际URL
-const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
+const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/';
 
 // 视频信息API
 export async function getVideoInfo(url) {
