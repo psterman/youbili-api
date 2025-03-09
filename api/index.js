@@ -3,112 +3,52 @@
 import { fallbackYouTubeDownload } from './youtube.js';
 import { fallbackBilibiliDownload } from './bilibili.js';
 
-// Vercel API端点 - 修正为正确的路径
-// 注意：Vercel API 端点应该是 /api/video-info，而不是 api/video-info
+// Vercel API端点
 const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
 
-// 视频信息API
-export async function getVideoInfo(url) {
+// API 处理函数
+export default async function handler(req, res) {
+    // 设置 CORS 头
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // 处理 OPTIONS 请求
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    // 获取 URL 参数
+    const { url } = req.query;
+
+    if (!url) {
+        return res.status(400).json({ error: '请提供视频URL' });
+    }
+
     try {
-        console.log('正在处理视频链接:', url);
-
-        // 尝试使用Vercel API
-        try {
-            console.log('正在请求Vercel API:', VERCEL_API_ENDPOINT);
-
-            // 调用Vercel API
-            const apiUrl = `${VERCEL_API_ENDPOINT}?url=${encodeURIComponent(url)}`;
-            console.log('完整API请求URL:', apiUrl);
-
-            // 添加超时处理
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
-
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId); // 清除超时
-
-            console.log('API响应状态:', response.status);
-
-            if (!response.ok) {
-                // 获取错误响应文本
-                const errorText = await response.text();
-                console.error('Vercel API请求失败, 状态码:', response.status);
-                console.error('错误响应内容:', errorText);
-                throw new Error(`API请求失败: ${response.status}`);
+        // 检测平台
+        if (isYouTubeUrl(url)) {
+            console.log('检测到YouTube链接');
+            const videoId = extractYouTubeVideoId(url);
+            if (!videoId) {
+                return res.status(400).json({ error: '无法识别YouTube视频ID，请确保链接格式正确' });
             }
-
-            // 尝试解析JSON
-            const text = await response.text();
-            console.log('API响应内容:', text.substring(0, 100) + '...');
-
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch (parseError) {
-                console.error('JSON解析错误:', parseError);
-                throw new Error('API返回了无效的JSON格式');
+            const videoInfo = await getYouTubeDirectLinks(videoId);
+            return res.status(200).json(videoInfo);
+        } else if (isBilibiliUrl(url)) {
+            console.log('检测到B站链接');
+            const videoId = extractBilibiliVideoId(url);
+            if (!videoId) {
+                return res.status(400).json({ error: '无法识别B站视频ID，请确保链接格式正确' });
             }
-
-            console.log('Vercel API返回数据:', data);
-
-            // 如果API返回了有效数据
-            if (data && data.formats && data.formats.length > 0) {
-                // 添加API来源信息
-                data.apiSource = 'Vercel API';
-                return data;
-            }
-
-            // 如果没有返回有效数据，抛出错误
-            throw new Error('Vercel API未返回有效的下载链接');
-        } catch (apiError) {
-            console.error('Vercel API调用失败，使用备用方法:', apiError);
-
-            // 使用备用方法
-            if (isYouTubeUrl(url)) {
-                console.log('检测到YouTube链接，使用备用下载服务');
-                const videoId = extractYouTubeVideoId(url);
-                if (!videoId) {
-                    throw new Error('无法识别YouTube视频ID，请确保链接格式正确');
-                }
-                return await getYouTubeDirectLinks(videoId);
-            } else if (isBilibiliUrl(url)) {
-                console.log('检测到B站链接，使用备用下载服务');
-                const videoId = extractBilibiliVideoId(url);
-                if (!videoId) {
-                    throw new Error('无法识别B站视频ID，请确保链接格式正确');
-                }
-                return await getBilibiliDirectLinks(videoId);
-            } else {
-                throw new Error('不支持的视频平台，目前仅支持YouTube和B站');
-            }
+            const videoInfo = await getBilibiliDirectLinks(videoId);
+            return res.status(200).json(videoInfo);
+        } else {
+            return res.status(400).json({ error: '不支持的视频平台，目前仅支持YouTube和B站' });
         }
     } catch (error) {
         console.error('获取视频信息失败:', error);
-
-        // 尝试使用备用方法
-        console.log('尝试使用备用方法获取下载链接');
-
-        if (isYouTubeUrl(url)) {
-            const videoId = extractYouTubeVideoId(url);
-            if (videoId) {
-                return await fallbackYouTubeDownload(videoId);
-            }
-        } else if (isBilibiliUrl(url)) {
-            const videoId = extractBilibiliVideoId(url);
-            if (videoId) {
-                return await fallbackBilibiliDownload(videoId);
-            }
-        }
-
-        throw error;
+        return res.status(500).json({ error: '获取视频信息失败', message: error.message });
     }
 }
 
@@ -141,7 +81,7 @@ async function getYouTubeDirectLinks(videoId) {
         title: `YouTube视频 (ID: ${videoId})`,
         uploader: 'YouTube',
         formats: formats,
-        apiSource: '直接下载服务'
+        apiSource: 'Vercel API'
     };
 }
 
@@ -174,7 +114,7 @@ async function getBilibiliDirectLinks(videoId) {
         title: `B站视频 (ID: ${videoId})`,
         uploader: 'B站UP主',
         formats: formats,
-        apiSource: '直接下载服务'
+        apiSource: 'Vercel API'
     };
 }
 
@@ -204,12 +144,6 @@ function extractYouTubeVideoId(url) {
 
     // 处理嵌入链接 (youtube.com/embed/VIDEO_ID)
     match = url.match(/youtube\.com\/embed\/([^?&#]*)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    // 处理其他可能的格式
-    match = url.match(/youtube\.com\/.*[?&]v=([^&#]*)/);
     if (match && match[1]) {
         return match[1];
     }
