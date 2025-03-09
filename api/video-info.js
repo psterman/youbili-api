@@ -29,90 +29,33 @@ export default async function handler(req, res) {
 
     try {
         // 检测平台
-        const platform = detectPlatform(url);
-
-        if (!platform) {
-            return res.status(400).json({ error: '不支持的视频平台，目前仅支持YouTube和B站' });
-        }
-
-        let videoInfo;
-
-        if (platform === PLATFORMS.YOUTUBE) {
+        if (isYouTubeUrl(url)) {
+            console.log('检测到YouTube链接');
             const videoId = extractYouTubeVideoId(url);
             if (!videoId) {
-                return res.status(400).json({ error: '无法提取YouTube视频ID' });
+                return res.status(400).json({ error: '无法识别YouTube视频ID，请确保链接格式正确' });
             }
-            videoInfo = await getYouTubeVideoInfo(videoId);
-        } else if (platform === PLATFORMS.BILIBILI) {
+            const videoInfo = await getYouTubeDirectLinks(videoId);
+            return res.status(200).json(videoInfo);
+        } else if (isBilibiliUrl(url)) {
+            console.log('检测到B站链接');
             const videoId = extractBilibiliVideoId(url);
             if (!videoId) {
-                return res.status(400).json({ error: '无法提取B站视频ID' });
+                return res.status(400).json({ error: '无法识别B站视频ID，请确保链接格式正确' });
             }
-            videoInfo = await getBilibiliVideoInfo(videoId);
+            const videoInfo = await getBilibiliDirectLinks(videoId);
+            return res.status(200).json(videoInfo);
+        } else {
+            return res.status(400).json({ error: '不支持的视频平台，目前仅支持YouTube和B站' });
         }
-
-        // 添加 API 来源信息
-        videoInfo.apiSource = 'Vercel API';
-
-        return res.status(200).json(videoInfo);
     } catch (error) {
-        console.error('处理视频信息请求失败:', error);
+        console.error('获取视频信息失败:', error);
         return res.status(500).json({ error: '获取视频信息失败', message: error.message });
     }
 }
 
-// 检测视频平台
-function detectPlatform(url) {
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        return PLATFORMS.YOUTUBE;
-    } else if (url.includes('bilibili.com') || url.includes('b23.tv')) {
-        return PLATFORMS.BILIBILI;
-    }
-    return null;
-}
-
-// 提取 YouTube 视频 ID
-function extractYouTubeVideoId(url) {
-    // 处理标准链接 (youtube.com/watch?v=VIDEO_ID)
-    let match = url.match(/[?&]v=([^&#]*)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    // 处理短链接 (youtu.be/VIDEO_ID)
-    match = url.match(/youtu\.be\/([^?&#]*)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    // 处理嵌入链接 (youtube.com/embed/VIDEO_ID)
-    match = url.match(/youtube\.com\/embed\/([^?&#]*)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    return null;
-}
-
-// 提取 B站 视频 ID
-function extractBilibiliVideoId(url) {
-    // 处理标准链接 (bilibili.com/video/BV1xx411c7mD)
-    let match = url.match(/bilibili\.com\/video\/([^\/\?]+)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    // 处理短链接 (b23.tv/xxxxx)
-    match = url.match(/b23\.tv\/([^\/\?]+)/);
-    if (match && match[1]) {
-        return match[1];
-    }
-
-    return null;
-}
-
-// 获取 YouTube 视频信息
-async function getYouTubeVideoInfo(videoId) {
+// 获取YouTube直接下载链接
+async function getYouTubeDirectLinks(videoId) {
     try {
         // 使用 y2mate API 获取视频信息
         const apiUrl = `https://www.y2mate.com/mates/analyzeV2/ajax`;
@@ -170,7 +113,8 @@ async function getYouTubeVideoInfo(videoId) {
             title: title,
             uploader: data.a || 'YouTube',
             thumbnail: thumbnail,
-            formats: formats
+            formats: formats,
+            apiSource: 'Vercel API'
         };
     } catch (error) {
         console.error('获取YouTube视频信息失败:', error);
@@ -199,13 +143,14 @@ async function getYouTubeVideoInfo(videoId) {
                     size: '自动检测',
                     url: `https://ssyoutube.com/watch?v=${videoId}`
                 }
-            ]
+            ],
+            apiSource: 'Vercel API (备用)'
         };
     }
 }
 
-// 获取 B站 视频信息
-async function getBilibiliVideoInfo(videoId) {
+// 获取B站直接下载链接
+async function getBilibiliDirectLinks(videoId) {
     try {
         // 使用第三方 API
         const apiUrl = `https://api.injahow.cn/bparse/?url=https://www.bilibili.com/video/${videoId}&type=mp4`;
@@ -248,7 +193,8 @@ async function getBilibiliVideoInfo(videoId) {
             id: videoId,
             title,
             uploader,
-            formats
+            formats,
+            apiSource: 'Vercel API'
         };
     } catch (error) {
         console.error('获取B站视频信息失败:', error);
@@ -277,7 +223,58 @@ async function getBilibiliVideoInfo(videoId) {
                     size: '自动检测',
                     url: `https://injahow.com/bparse/?url=https://www.bilibili.com/video/${videoId}`
                 }
-            ]
+            ],
+            apiSource: 'Vercel API (备用)'
         };
     }
+}
+
+// 辅助函数：检查是否为YouTube链接
+function isYouTubeUrl(url) {
+    return url.includes('youtube.com') || url.includes('youtu.be');
+}
+
+// 辅助函数：检查是否为B站链接
+function isBilibiliUrl(url) {
+    return url.includes('bilibili.com') || url.includes('b23.tv');
+}
+
+// 辅助函数：提取YouTube视频ID
+function extractYouTubeVideoId(url) {
+    // 处理标准链接 (youtube.com/watch?v=VIDEO_ID)
+    let match = url.match(/[?&]v=([^&#]*)/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // 处理短链接 (youtu.be/VIDEO_ID)
+    match = url.match(/youtu\.be\/([^?&#]*)/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // 处理嵌入链接 (youtube.com/embed/VIDEO_ID)
+    match = url.match(/youtube\.com\/embed\/([^?&#]*)/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    return null;
+}
+
+// 辅助函数：提取B站视频ID
+function extractBilibiliVideoId(url) {
+    // 处理标准链接 (bilibili.com/video/BV1xx411c7mD)
+    let match = url.match(/bilibili\.com\/video\/([^\/\?]+)/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // 处理短链接 (b23.tv/xxxxx)
+    match = url.match(/b23\.tv\/([^\/\?]+)/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    return null;
 } 
