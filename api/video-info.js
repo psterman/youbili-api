@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import ytdl from 'ytdl-core';
 
 // 支持的平台
 const PLATFORMS = {
@@ -62,52 +63,74 @@ export default async function handler(req, res) {
 // 获取YouTube直接下载链接
 async function getYouTubeDirectLinks(videoId) {
     try {
-        // 获取视频标题
-        let title;
-        try {
-            const response = await fetch(`https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v=${videoId}&format=json`);
-            if (!response.ok) {
-                throw new Error('获取视频信息失败');
-            }
-            const data = await response.json();
-            title = data.title;
-        } catch (e) {
-            console.error('获取视频标题失败:', e);
-            title = `YouTube视频 ${videoId}`;
-        }
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        console.log('获取YouTube视频信息:', videoUrl);
 
-        // 返回视频信息和下载格式
-        return {
-            id: videoId,
-            title: title,
-            uploader: 'YouTube',
-            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-            formats: [
-                {
+        // 使用ytdl-core获取视频信息
+        const info = await ytdl.getInfo(videoUrl);
+
+        // 获取不同质量的格式
+        const formats = [];
+
+        // 360p
+        try {
+            const format360p = ytdl.chooseFormat(info.formats, { quality: 'lowest' });
+            if (format360p) {
+                formats.push({
                     quality: '360p',
                     format: 'mp4',
-                    size: '8.7 MB',
-                    url: `https://youbili-api.vercel.app/download/youtube/${videoId}/360`
-                },
-                {
+                    size: format360p.contentLength ? `${(format360p.contentLength / 1024 / 1024).toFixed(2)} MB` : '8.7 MB',
+                    url: format360p.url
+                });
+            }
+        } catch (e) {
+            console.warn('无法获取360p格式:', e);
+        }
+
+        // 720p
+        try {
+            const format720p = ytdl.chooseFormat(info.formats, { quality: 'high' });
+            if (format720p) {
+                formats.push({
                     quality: '720p',
                     format: 'mp4',
-                    size: '18.3 MB',
-                    url: `https://youbili-api.vercel.app/download/youtube/${videoId}/720`
-                },
-                {
+                    size: format720p.contentLength ? `${(format720p.contentLength / 1024 / 1024).toFixed(2)} MB` : '18.3 MB',
+                    url: format720p.url
+                });
+            }
+        } catch (e) {
+            console.warn('无法获取720p格式:', e);
+        }
+
+        // 1080p
+        try {
+            const format1080p = ytdl.chooseFormat(info.formats, { quality: 'highest' });
+            if (format1080p) {
+                formats.push({
                     quality: '1080p',
                     format: 'mp4',
-                    size: '79.7 MB',
-                    url: `https://youbili-api.vercel.app/download/youtube/${videoId}/1080`
-                },
-                {
-                    quality: 'auto',
-                    format: 'mp4',
-                    size: '未知',
-                    url: `https://youbili-api.vercel.app/download/youtube/${videoId}/auto`
-                }
-            ],
+                    size: format1080p.contentLength ? `${(format1080p.contentLength / 1024 / 1024).toFixed(2)} MB` : '79.7 MB',
+                    url: format1080p.url
+                });
+            }
+        } catch (e) {
+            console.warn('无法获取1080p格式:', e);
+        }
+
+        // 自动质量（最高可用质量）
+        formats.push({
+            quality: 'auto',
+            format: 'mp4',
+            size: '未知',
+            url: formats[formats.length - 1]?.url || ''
+        });
+
+        return {
+            id: videoId,
+            title: info.videoDetails.title,
+            uploader: info.videoDetails.author.name,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+            formats: formats,
             apiSource: 'Vercel API'
         };
     } catch (error) {
