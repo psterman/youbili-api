@@ -34,6 +34,14 @@ export default function handler(req, res) {
                     params: {
                         url: '视频URL (必填)'
                     }
+                },
+                {
+                    path: '/api/test',
+                    description: '测试端点'
+                },
+                {
+                    path: '/api/hello',
+                    description: '问候端点'
                 }
             ],
             status: 'online',
