@@ -72,37 +72,51 @@ async function ensureYtDlp() {
 // 获取YouTube视频信息
 async function getYouTubeInfo(videoId) {
     try {
-        // 使用 9xbuddy API
-        const response = await fetch(`https://9xbuddy.in/process?url=https://www.youtube.com/watch?v=${videoId}`);
-        const html = await response.text();
+        // 第一步：获取k参数
+        const initResponse = await fetch('https://www.y2mate.com/mates/analyzeV2/ajax', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': 'https://www.y2mate.com',
+                'Referer': 'https://www.y2mate.com/'
+            },
+            body: `k_query=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D${videoId}&k_page=home&hl=en&q_auto=1`
+        });
 
-        // 提取视频信息
-        const titleMatch = html.match(/<title>(.*?)<\/title>/);
-        const title = titleMatch ? titleMatch[1].replace(' - 9xBuddy', '') : '未知标题';
+        const initData = await initResponse.json();
+
+        if (!initData.status === 'ok' || !initData.vid) {
+            throw new Error('无法获取视频信息');
+        }
+
+        // 第二步：获取下载链接
+        const convertResponse = await fetch('https://www.y2mate.com/mates/convertV2/index', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Origin': 'https://www.y2mate.com',
+                'Referer': 'https://www.y2mate.com/'
+            },
+            body: `vid=${initData.vid}&k=${encodeURIComponent(initData.links.mp4['22'].k)}`
+        });
+
+        const convertData = await convertResponse.json();
 
         return {
-            title,
+            title: initData.title || '未知标题',
             thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
             uploader: 'YouTube',
-            duration: 0,
-            formats: [
-                {
-                    quality: '1080p',
-                    format: 'mp4',
-                    url: `https://9xbuddy.in/download?url=https://www.youtube.com/watch?v=${videoId}&quality=1080`,
-                    size: '自动检测',
-                    vcodec: 'h264',
-                    acodec: 'aac'
-                },
-                {
-                    quality: '720p',
-                    format: 'mp4',
-                    url: `https://9xbuddy.in/download?url=https://www.youtube.com/watch?v=${videoId}&quality=720`,
-                    size: '自动检测',
-                    vcodec: 'h264',
-                    acodec: 'aac'
-                }
-            ],
+            duration: initData.t || 0,
+            formats: Object.entries(initData.links.mp4).map(([quality, info]) => ({
+                quality: info.q,
+                format: 'mp4',
+                url: info.k,
+                size: info.size,
+                vcodec: 'h264',
+                acodec: 'aac'
+            })),
             platform: 'YouTube',
             originalUrl: `https://www.youtube.com/watch?v=${videoId}`
         };
@@ -130,21 +144,38 @@ async function getBilibiliInfo(videoId) {
         }
 
         const info = data.data;
+
+        // 使用 BiliGet API 获取下载链接
+        const downloadResponse = await fetch(`https://api.biliget.com/bilibili/video/download?bvid=${videoId}`);
+        const downloadData = await downloadResponse.json();
+
+        const formats = [];
+        if (downloadData.success && downloadData.data) {
+            downloadData.data.forEach(item => {
+                formats.push({
+                    quality: item.quality,
+                    format: 'mp4',
+                    url: item.url,
+                    size: item.size,
+                    vcodec: 'h264',
+                    acodec: 'aac'
+                });
+            });
+        }
+
         return {
             title: info.title,
             thumbnail: info.pic,
             uploader: info.owner?.name || '未知UP主',
             duration: info.duration,
-            formats: [
-                {
-                    quality: '高清',
-                    format: 'mp4',
-                    url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`,
-                    size: '自动检测',
-                    vcodec: 'h264',
-                    acodec: 'aac'
-                }
-            ],
+            formats: formats.length > 0 ? formats : [{
+                quality: '高清',
+                format: 'mp4',
+                url: `https://bili.download.download/${videoId}`,
+                size: '自动检测',
+                vcodec: 'h264',
+                acodec: 'aac'
+            }],
             platform: 'Bilibili',
             originalUrl: `https://www.bilibili.com/video/${videoId}`
         };
