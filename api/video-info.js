@@ -1,9 +1,9 @@
-import fetch from 'node-fetch';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
 
 const execAsync = promisify(exec);
-const YT_DLP_PATH = '/app/yt-dlp';
 
 // 平台识别正则表达式
 const PLATFORM_PATTERNS = {
@@ -28,37 +28,34 @@ function extractVideoId(url) {
 // 检查并安装 yt-dlp
 async function ensureYtDlp() {
     try {
-        await execAsync('which yt-dlp');
-    } catch (error) {
-        console.log('Installing yt-dlp...');
-        try {
-            // 下载旧版本的 yt-dlp (支持 Python 3.7+)
-            await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2022.01.21/yt-dlp -o /app/yt-dlp');
-            await execAsync('chmod +x /app/yt-dlp');
-        } catch (installError) {
-            throw new Error('Failed to install yt-dlp');
+        // 检查 yt-dlp 是否已安装
+        const ytDlpPath = path.join(process.cwd(), 'yt-dlp');
+        if (!fs.existsSync(ytDlpPath)) {
+            console.log('Installing yt-dlp...');
+            // 下载 yt-dlp
+            await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2023.11.16/yt-dlp -o yt-dlp');
+            // 设置执行权限
+            await execAsync('chmod +x yt-dlp');
         }
+        return ytDlpPath;
+    } catch (error) {
+        console.error('Failed to install yt-dlp:', error);
+        throw new Error('无法安装 yt-dlp');
     }
 }
 
-// 获取视频下载链接
-async function getVideoDownloadLinks(url) {
+// 获取视频信息
+async function getVideoInfo(url, ytDlpPath) {
     try {
-        // 确保 yt-dlp 已安装
-        await ensureYtDlp();
-
-        // 使用 yt-dlp 获取视频信息和下载链接
-        const { stdout } = await execAsync(`${YT_DLP_PATH} -j "${url}" --no-warnings`);
+        // 使用 yt-dlp 获取视频信息
+        const { stdout } = await execAsync(`${ytDlpPath} --no-warnings --dump-json "${url}"`);
         const info = JSON.parse(stdout);
 
-        // 过滤并整理下载链接
-        const formats = [];
-
         // 处理视频格式
+        const formats = [];
         if (info.formats) {
             for (const format of info.formats) {
-                // 只选择有视频的格式
-                if (format.vcodec !== 'none' && format.url) {
+                if (format.vcodec !== 'none' && format.acodec !== 'none') {
                     formats.push({
                         quality: format.height ? `${format.height}p` : '未知',
                         format: format.ext || 'mp4',
@@ -78,7 +75,7 @@ async function getVideoDownloadLinks(url) {
             return heightB - heightA;
         });
 
-    return {
+        return {
             title: info.title || '未知标题',
             thumbnail: info.thumbnail || '',
             uploader: info.uploader || '未知上传者',
@@ -88,8 +85,8 @@ async function getVideoDownloadLinks(url) {
             originalUrl: url
         };
     } catch (error) {
-        console.error('获取视频下载链接失败:', error);
-        throw new Error('获取视频下载链接失败，请检查视频链接是否有效');
+        console.error('获取视频信息失败:', error);
+        throw new Error('获取视频信息失败，请检查视频链接是否有效');
     }
 }
 
@@ -106,17 +103,24 @@ export default async function handler(req, res) {
     }
 
     try {
-    const { url } = req.query;
+        const { url } = req.query;
 
-    if (!url) {
-        return res.status(400).json({ error: '请提供视频URL' });
-    }
+        if (!url) {
+            return res.status(400).json({ error: '请提供视频URL' });
+        }
 
-        // 获取视频下载链接
-        const info = await getVideoDownloadLinks(url);
+        // 确保 yt-dlp 已安装
+        const ytDlpPath = await ensureYtDlp();
+
+        // 获取视频信息
+        const info = await getVideoInfo(url, ytDlpPath);
+
         res.json(info);
     } catch (error) {
         console.error('处理失败:', error);
-        res.status(500).json({ error: error.message || '获取视频下载链接失败' });
+        res.status(500).json({
+            error: error.message || '获取视频信息失败',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 }

@@ -144,25 +144,32 @@
             background: #388e3c;
         }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
+        .platform-examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
         }
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
+        .platform-tag {
+            background: #e3f2fd;
+            color: #1976D2;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
 
-            100% {
-                transform: rotate(360deg);
-            }
+        .platform-tag:hover {
+            background: #bbdefb;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -171,20 +178,39 @@
     <div class="container">
         <h1>YouBili 视频下载助手</h1>
 
+        <div class="platform-examples">
+            <span class="platform-tag" onclick="fillExample('youtube')">YouTube</span>
+            <span class="platform-tag" onclick="fillExample('bilibili')">哔哩哔哩</span>
+        </div>
+
         <div class="input-group">
             <input type="text" id="videoUrl" placeholder="请输入视频链接 (支持 YouTube、B站等)" />
             <button onclick="getVideoInfo()">获取视频信息</button>
         </div>
 
-        <div id="loading">正在获取视频信息，请稍候...</div>
-        <div id="error"></div>
-
-        <div id="videoInfo">
-            <!-- 视频信息将在这里显示 -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>正在获取视频信息，请稍候...</p>
         </div>
+        <div id="error"></div>
+        <div id="videoInfo"></div>
+
+        <footer>
+            <p>© 2024 YouBili - 视频下载助手</p>
+            <p>免责声明：本工具仅用于学习和研究目的，请遵守相关法律法规和平台规则</p>
+        </footer>
     </div>
 
     <script>
+        const EXAMPLES = {
+            youtube: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            bilibili: 'https://www.bilibili.com/video/BV1GJ411x7h7'
+        };
+
+        function fillExample(platform) {
+            document.getElementById('videoUrl').value = EXAMPLES[platform];
+        }
+
         async function getVideoInfo() {
             const videoUrl = document.getElementById('videoUrl').value.trim();
             const loading = document.getElementById('loading');
