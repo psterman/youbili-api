@@ -15,6 +15,10 @@
             "dest": "/api/video-info.js"
         },
         {
+            "src": "/api/test-ytdlp",
+            "dest": "/api/test-ytdlp.js"
+        },
+        {
             "src": "/download/youtube/(?<videoId>[^/]+)/(?<quality>[^/]+)",
             "dest": "/api/download/youtube/[videoId]/[quality].js?videoId=$videoId&quality=$quality"
         }
