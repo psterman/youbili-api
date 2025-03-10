@@ -2,8 +2,8 @@ import fetch from 'node-fetch';
 import { exec } from 'yt-dlp-exec';
 import path from 'path';
 
-// 设置 yt-dlp 路径
-const YT_DLP_PATH = process.env.VERCEL ? '.vercel/bin/yt-dlp' : 'yt-dlp';
+// 更新 yt-dlp 路径
+const YT_DLP_PATH = '/tmp/yt-dlp';
 
 // 支持的平台
 const PLATFORMS = {
