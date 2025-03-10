@@ -7,7 +7,7 @@ import { fallbackBilibiliDownload } from './bilibili.js';
 const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
 
 // API 处理函数
-export default async function handler(req, res) {
+export default function handler(req, res) {
     // 设置 CORS 头
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -18,38 +18,25 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
-    // 获取 URL 参数
-    const { url } = req.query;
-
-    if (!url) {
-        return res.status(400).json({ error: '请提供视频URL' });
-    }
-
-    try {
-        // 检测平台
-        if (isYouTubeUrl(url)) {
-            console.log('检测到YouTube链接');
-            const videoId = extractYouTubeVideoId(url);
-            if (!videoId) {
-                return res.status(400).json({ error: '无法识别YouTube视频ID，请确保链接格式正确' });
+    // 返回 API 信息
+    res.status(200).json({
+        message: 'YouBili API 服务正在运行',
+        endpoints: [
+            {
+                path: '/api',
+                description: 'API 信息'
+            },
+            {
+                path: '/api/video-info',
+                description: '获取视频信息和下载链接',
+                params: {
+                    url: '视频URL (必填)'
+                }
             }
-            const videoInfo = await getYouTubeDirectLinks(videoId);
-            return res.status(200).json(videoInfo);
-        } else if (isBilibiliUrl(url)) {
-            console.log('检测到B站链接');
-            const videoId = extractBilibiliVideoId(url);
-            if (!videoId) {
-                return res.status(400).json({ error: '无法识别B站视频ID，请确保链接格式正确' });
-            }
-            const videoInfo = await getBilibiliDirectLinks(videoId);
-            return res.status(200).json(videoInfo);
-        } else {
-            return res.status(400).json({ error: '不支持的视频平台，目前仅支持YouTube和B站' });
-        }
-    } catch (error) {
-        console.error('获取视频信息失败:', error);
-        return res.status(500).json({ error: '获取视频信息失败', message: error.message });
-    }
+        ],
+        status: 'online',
+        timestamp: new Date().toISOString()
+    });
 }
 
 // 获取YouTube直接下载链接
