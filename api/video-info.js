@@ -59,7 +59,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
         let title = `YouTube视频 ${videoId}`;
         let uploader = 'YouTube';
         let thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-        
+
         try {
             const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
             if (oembedResponse.ok) {
@@ -70,7 +70,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
         } catch (e) {
             console.warn('获取YouTube视频元数据失败:', e);
         }
-        
+
         // 2. 尝试使用 Cobalt API 获取真实下载链接
         let formats = [];
         try {
@@ -93,7 +93,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
                     dubLang: false
                 })
             });
-            
+
             if (cobaltResponse.ok) {
                 const cobaltData = await cobaltResponse.json();
                 if (cobaltData.url) {
@@ -109,7 +109,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
         } catch (e) {
             console.warn('使用Cobalt获取下载链接失败:', e);
         }
-        
+
         // 3. 如果没有获取到真实链接，提供备用下载服务
         if (formats.length === 0) {
             formats = [
@@ -136,7 +136,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
                 }
             ];
         }
-        
+
         return {
             id: videoId,
             title: title,
@@ -148,7 +148,7 @@ async function getYouTubeInfo(videoId, originalUrl) {
         };
     } catch (error) {
         console.error('获取YouTube视频信息失败:', error);
-        
+
         // 返回备用下载选项
         return {
             id: videoId,
@@ -178,25 +178,25 @@ async function getBilibiliInfo(videoId, originalUrl) {
         let uploader = 'B站UP主';
         let thumbnail = '';
         let formats = [];
-        
+
         try {
             // 尝试使用 injahow API 获取视频信息
             const apiUrl = `https://api.injahow.cn/bparse/?url=https://www.bilibili.com/video/${videoId}&type=json`;
             const response = await fetch(apiUrl);
-            
+
             if (response.ok) {
                 const data = await response.json();
                 if (data.title) title = data.title;
                 if (data.author) uploader = data.author;
                 if (data.pic) thumbnail = data.pic;
-                
+
                 // 如果有直接下载链接
                 if (data.data && data.data.durl && data.data.durl.length > 0) {
                     data.data.durl.forEach((item, index) => {
                         let quality = '未知';
                         if (index === 0) quality = '高清';
                         else if (index === 1) quality = '标清';
-                        
+
                         formats.push({
                             quality: quality,
                             format: 'mp4',
@@ -210,7 +210,7 @@ async function getBilibiliInfo(videoId, originalUrl) {
         } catch (e) {
             console.warn('获取B站视频信息失败:', e);
         }
-        
+
         // 如果没有获取到直接链接，提供备用下载服务
         if (formats.length === 0) {
             formats = [
@@ -230,7 +230,7 @@ async function getBilibiliInfo(videoId, originalUrl) {
                 }
             ];
         }
-        
+
         return {
             id: videoId,
             title: title,
@@ -242,7 +242,7 @@ async function getBilibiliInfo(videoId, originalUrl) {
         };
     } catch (error) {
         console.error('获取B站视频信息失败:', error);
-        
+
         // 返回备用下载选项
         return {
             id: videoId,
@@ -312,4 +312,4 @@ function extractBilibiliVideoId(url) {
     }
 
     return null;
-} 
+}

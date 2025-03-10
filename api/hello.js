@@ -3,7 +3,7 @@ export default function handler(req, res) {
     // 设置 CORS 头
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'application/json');
-    
+
     // 返回简单响应
     return res.status(200).json({
       message: 'Hello from YouBili API!',
