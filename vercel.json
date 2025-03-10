@@ -1,27 +1,12 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "api/**/*.js",
-            "use": "@vercel/node"
-        }
-    ],
     "routes": [
         {
-            "src": "/api/test-ytdlp",
-            "methods": ["GET"],
-            "dest": "api/test-ytdlp.js"
+            "handle": "filesystem"
         },
         {
-            "src": "/api/video-info",
-            "methods": ["GET"],
-            "dest": "api/video-info.js"
+            "src": "/api/(.*)",
+            "dest": "/api/$1"
         }
-    ],
-    "functions": {
-        "api/**/*.js": {
-            "memory": 1024,
-            "maxDuration": 60
-        }
-    }
+    ]
 }
