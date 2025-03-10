@@ -8,35 +8,44 @@ const VERCEL_API_ENDPOINT = 'https://youbili-api.vercel.app/api/video-info';
 
 // API 处理函数
 export default function handler(req, res) {
-    // 设置 CORS 头
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    try {
+        // 设置 CORS 头
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    // 处理 OPTIONS 请求
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+        // 处理 OPTIONS 请求
+        if (req.method === 'OPTIONS') {
+            return res.status(200).end();
+        }
 
-    // 返回 API 信息
-    res.status(200).json({
-        message: 'YouBili API 服务正在运行',
-        endpoints: [
-            {
-                path: '/api',
-                description: 'API 信息'
-            },
-            {
-                path: '/api/video-info',
-                description: '获取视频信息和下载链接',
-                params: {
-                    url: '视频URL (必填)'
+        // 返回 API 信息
+        return res.status(200).json({
+            message: 'YouBili API 服务正在运行',
+            endpoints: [
+                {
+                    path: '/api',
+                    description: 'API 信息'
+                },
+                {
+                    path: '/api/video-info',
+                    description: '获取视频信息和下载链接',
+                    params: {
+                        url: '视频URL (必填)'
+                    }
                 }
-            }
-        ],
-        status: 'online',
-        timestamp: new Date().toISOString()
-    });
+            ],
+            status: 'online',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('API错误:', error);
+        return res.status(500).json({
+            error: '服务器内部错误',
+            message: error.message
+        });
+    }
 }
 
 // 获取YouTube直接下载链接
