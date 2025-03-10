@@ -1,5 +1,9 @@
 import fetch from 'node-fetch';
-import ytdl from 'ytdl-core';
+import { exec } from 'yt-dlp-exec';
+import path from 'path';
+
+// 设置 yt-dlp 路径
+const YT_DLP_PATH = process.env.VERCEL ? '.vercel/bin/yt-dlp' : 'yt-dlp';
 
 // 支持的平台
 const PLATFORMS = {
@@ -30,26 +34,17 @@ export default async function handler(req, res) {
     console.log('处理视频URL:', url);
 
     try {
-        // 检测平台
+        let videoInfo;
         if (isYouTubeUrl(url)) {
             console.log('检测到YouTube链接');
-            const videoId = extractYouTubeVideoId(url);
-            if (!videoId) {
-                return res.status(400).json({ error: '无法识别YouTube视频ID，请确保链接格式正确' });
-            }
-            const videoInfo = await getYouTubeDirectLinks(videoId);
-            return res.status(200).json(videoInfo);
+            videoInfo = await getVideoInfo(url, 'youtube');
         } else if (isBilibiliUrl(url)) {
             console.log('检测到B站链接');
-            const videoId = extractBilibiliVideoId(url);
-            if (!videoId) {
-                return res.status(400).json({ error: '无法识别B站视频ID，请确保链接格式正确' });
-            }
-            const videoInfo = await getBilibiliDirectLinks(videoId);
-            return res.status(200).json(videoInfo);
+            videoInfo = await getVideoInfo(url, 'bilibili');
         } else {
             return res.status(400).json({ error: '不支持的视频平台，目前仅支持YouTube和B站' });
         }
+        return res.status(200).json(videoInfo);
     } catch (error) {
         console.error('获取视频信息失败:', error);
         return res.status(500).json({
@@ -60,163 +55,123 @@ export default async function handler(req, res) {
     }
 }
 
-// 获取YouTube直接下载链接
-async function getYouTubeDirectLinks(videoId) {
+// 统一的视频信息获取函数
+async function getVideoInfo(url, platform) {
     try {
-        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        console.log('获取YouTube视频信息:', videoUrl);
+        console.log(`正在获取${platform}视频信息...`);
 
-        // 使用ytdl-core获取视频信息
-        const info = await ytdl.getInfo(videoUrl);
+        // 配置 yt-dlp 参数
+        const options = {
+            dumpSingleJson: true,
+            noWarnings: true,
+            noCallHome: true,
+            extractorRetries: 3,
+            retries: 3,
+            format: platform === 'youtube'
+                ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+                : 'best[ext=mp4]/best',
+            youtubeSkipDashManifest: true,
+            addHeader: [
+                'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            ],
+            binPath: YT_DLP_PATH
+        };
 
-        // 获取不同质量的格式
-        const formats = [];
+        // 获取视频信息
+        const info = await exec(url, options);
+        console.log('成功获取视频信息');
 
-        // 360p
-        try {
-            const format360p = ytdl.chooseFormat(info.formats, { quality: 'lowest' });
-            if (format360p) {
-                formats.push({
-                    quality: '360p',
+        // 处理格式列表
+        let formats = [];
+        if (info.formats) {
+            formats = info.formats
+                .filter(f => f.ext === 'mp4' && f.filesize)
+                .map(f => ({
+                    quality: getQualityLabel(f),
                     format: 'mp4',
-                    size: format360p.contentLength ? `${(format360p.contentLength / 1024 / 1024).toFixed(2)} MB` : '8.7 MB',
-                    url: format360p.url
-                });
-            }
-        } catch (e) {
-            console.warn('无法获取360p格式:', e);
+                    size: formatFileSize(f.filesize),
+                    url: f.url,
+                    vcodec: f.vcodec,
+                    acodec: f.acodec,
+                    filesize: f.filesize,
+                    tbr: f.tbr || 0
+                }))
+                .sort((a, b) => b.tbr - a.tbr);
+
+            // 去重并保留最佳质量
+            formats = deduplicateFormats(formats);
         }
 
-        // 720p
-        try {
-            const format720p = ytdl.chooseFormat(info.formats, { quality: 'high' });
-            if (format720p) {
-                formats.push({
-                    quality: '720p',
-                    format: 'mp4',
-                    size: format720p.contentLength ? `${(format720p.contentLength / 1024 / 1024).toFixed(2)} MB` : '18.3 MB',
-                    url: format720p.url
-                });
-            }
-        } catch (e) {
-            console.warn('无法获取720p格式:', e);
+        // 如果没有找到格式，尝试使用备用格式
+        if (formats.length === 0) {
+            formats = [{
+                quality: 'auto',
+                format: 'mp4',
+                size: '未知',
+                url: info.url,
+                vcodec: info.vcodec,
+                acodec: info.acodec
+            }];
         }
-
-        // 1080p
-        try {
-            const format1080p = ytdl.chooseFormat(info.formats, { quality: 'highest' });
-            if (format1080p) {
-                formats.push({
-                    quality: '1080p',
-                    format: 'mp4',
-                    size: format1080p.contentLength ? `${(format1080p.contentLength / 1024 / 1024).toFixed(2)} MB` : '79.7 MB',
-                    url: format1080p.url
-                });
-            }
-        } catch (e) {
-            console.warn('无法获取1080p格式:', e);
-        }
-
-        // 自动质量（最高可用质量）
-        formats.push({
-            quality: 'auto',
-            format: 'mp4',
-            size: '未知',
-            url: formats[formats.length - 1]?.url || ''
-        });
 
         return {
-            id: videoId,
-            title: info.videoDetails.title,
-            uploader: info.videoDetails.author.name,
-            thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-            formats: formats,
-            apiSource: 'Vercel API'
+            id: info.id,
+            title: info.title,
+            uploader: info.uploader || (platform === 'youtube' ? 'YouTube' : 'B站UP主'),
+            thumbnail: info.thumbnail,
+            duration: info.duration,
+            formats: formats.map(f => ({
+                quality: f.quality,
+                format: f.format,
+                size: f.size,
+                url: f.url
+            })),
+            apiSource: 'Vercel API (yt-dlp)'
         };
     } catch (error) {
-        console.error('获取YouTube视频信息失败:', error);
+        console.error(`获取${platform}视频信息失败:`, error);
         throw error;
     }
 }
 
-// 获取B站直接下载链接
-async function getBilibiliDirectLinks(videoId) {
-    try {
-        // 使用第三方 API
-        const apiUrl = `https://api.injahow.cn/bparse/?url=https://www.bilibili.com/video/${videoId}&type=mp4`;
-
-        const response = await fetch(apiUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('获取B站视频信息失败');
-        }
-
-        const data = await response.json();
-
-        if (!data.data || !data.data.durl) {
-            throw new Error('未返回有效的下载链接');
-        }
-
-        // 提取视频信息
-        const title = data.title || `B站视频 ${videoId}`;
-        const uploader = data.author || 'B站UP主';
-
-        // 提取下载链接
-        const formats = data.data.durl.map((item, index) => {
-            let quality = '未知';
-            if (index === 0) quality = '高清';
-            else if (index === 1) quality = '标清';
-
-            return {
-                quality,
-                format: 'mp4',
-                size: '未知',
-                url: item.url
-            };
-        });
-
-        return {
-            id: videoId,
-            title,
-            uploader,
-            formats,
-            apiSource: 'Vercel API'
-        };
-    } catch (error) {
-        console.error('获取B站视频信息失败:', error);
-
-        // 返回备用下载链接
-        return {
-            id: videoId,
-            title: `B站视频 ${videoId}`,
-            uploader: 'B站UP主',
-            formats: [
-                {
-                    quality: '高清',
-                    format: 'mp4',
-                    size: '自动检测',
-                    url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`
-                },
-                {
-                    quality: '原始质量',
-                    format: 'mp4',
-                    size: '自动检测',
-                    url: `https://bili.iiilab.com/?bvid=${videoId}`
-                },
-                {
-                    quality: '标清',
-                    format: 'mp4',
-                    size: '自动检测',
-                    url: `https://injahow.com/bparse/?url=https://www.bilibili.com/video/${videoId}`
-                }
-            ],
-            apiSource: 'Vercel API (备用)'
-        };
+// 获取质量标签
+function getQualityLabel(format) {
+    if (format.height) {
+        return `${format.height}p`;
     }
+    if (format.format_note) {
+        return format.format_note;
+    }
+    if (format.resolution !== 'unknown') {
+        return format.resolution;
+    }
+    return '自动';
+}
+
+// 格式去重
+function deduplicateFormats(formats) {
+    const seen = new Set();
+    return formats.filter(format => {
+        const key = format.quality;
+        if (seen.has(key)) {
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (!bytes) return '未知';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
 }
 
 // 辅助函数：检查是否为YouTube链接

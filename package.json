@@ -5,11 +5,13 @@
     "type": "module",
     "main": "index.js",
     "scripts": {
-        "dev": "vercel dev"
+        "dev": "vercel dev",
+        "build": "chmod +x install-yt-dlp.sh && ./install-yt-dlp.sh",
+        "vercel-build": "npm run build"
     },
     "dependencies": {
         "node-fetch": "^3.3.2",
-        "ytdl-core": "^4.11.5"
+        "yt-dlp-exec": "^1.1.3"
     },
     "devDependencies": {
         "vercel": "^28.0.0"

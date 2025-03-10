@@ -36,6 +36,14 @@
 
             <div class="download-options">
                 <h3>下载选项</h3>
+                <div class="download-tip">
+                    <p>下载说明：</p>
+                    <ul>
+                        <li>点击下载按钮后会跳转到对应的下载页面</li>
+                        <li>如果一个链接无法下载，请尝试其他链接</li>
+                        <li>建议从高到低依次尝试不同清晰度</li>
+                    </ul>
+                </div>
                 <div id="downloadLinks" class="download-links"></div>
             </div>
         </div>
@@ -92,9 +100,17 @@
                     downloadLinksDiv.appendChild(downloadOption);
                 });
 
+                // 如果有提示消息，显示它
+                if (data.message) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'notification info';
+                    messageDiv.textContent = data.message;
+                    downloadLinksDiv.insertBefore(messageDiv, downloadLinksDiv.firstChild);
+                }
+
                 videoInfoDiv.style.display = 'block';
             } catch (error) {
-                errorDiv.textContent = error.message || '获取视频信息失败';
+                errorDiv.textContent = error.message || '获取视频信息失败，请稍后重试';
                 errorDiv.style.display = 'block';
             } finally {
                 loadingDiv.style.display = 'none';
