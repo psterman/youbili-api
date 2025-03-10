@@ -36,19 +36,41 @@ async function ensureYtDlp() {
             await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2023.11.16/yt-dlp -o yt-dlp');
             // 设置执行权限
             await execAsync('chmod +x yt-dlp');
+            console.log('yt-dlp installed successfully');
         }
         return ytDlpPath;
     } catch (error) {
         console.error('Failed to install yt-dlp:', error);
-        throw new Error('无法安装 yt-dlp');
+        throw new Error('无法安装 yt-dlp: ' + error.message);
     }
 }
 
 // 获取视频信息
 async function getVideoInfo(url, ytDlpPath) {
+    console.log('Getting video info for:', url);
+    console.log('Using yt-dlp path:', ytDlpPath);
+
     try {
+        // 检查文件是否存在和可执行
+        if (!fs.existsSync(ytDlpPath)) {
+            throw new Error('yt-dlp not found');
+        }
+
         // 使用 yt-dlp 获取视频信息
-        const { stdout } = await execAsync(`${ytDlpPath} --no-warnings --dump-json "${url}"`);
+        const command = `${ytDlpPath} --no-warnings --dump-json "${url}"`;
+        console.log('Executing command:', command);
+
+        const { stdout, stderr } = await execAsync(command);
+
+        if (stderr) {
+            console.error('yt-dlp stderr:', stderr);
+        }
+
+        if (!stdout) {
+            throw new Error('No output from yt-dlp');
+        }
+
+        console.log('yt-dlp output received');
         const info = JSON.parse(stdout);
 
         // 处理视频格式
@@ -75,7 +97,7 @@ async function getVideoInfo(url, ytDlpPath) {
             return heightB - heightA;
         });
 
-        return {
+        const result = {
             title: info.title || '未知标题',
             thumbnail: info.thumbnail || '',
             uploader: info.uploader || '未知上传者',
@@ -84,16 +106,21 @@ async function getVideoInfo(url, ytDlpPath) {
             platform: info.extractor_key || '未知平台',
             originalUrl: url
         };
+
+        console.log('Video info processed successfully');
+        return result;
     } catch (error) {
-        console.error('获取视频信息失败:', error);
-        throw new Error('获取视频信息失败，请检查视频链接是否有效');
+        console.error('Error getting video info:', error);
+        throw new Error(`获取视频信息失败: ${error.message}`);
     }
 }
 
 export default async function handler(req, res) {
+    console.log('API request received:', req.method);
+
     // 设置CORS头
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     // 处理预检请求
@@ -102,8 +129,14 @@ export default async function handler(req, res) {
         return;
     }
 
+    // 只接受 POST 请求
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: '请使用 POST 方法' });
+    }
+
     try {
-        const { url } = req.query;
+        console.log('Request body:', req.body);
+        const { url } = req.body;
 
         if (!url) {
             return res.status(400).json({ error: '请提供视频URL' });
@@ -111,13 +144,16 @@ export default async function handler(req, res) {
 
         // 确保 yt-dlp 已安装
         const ytDlpPath = await ensureYtDlp();
+        console.log('yt-dlp path:', ytDlpPath);
 
         // 获取视频信息
         const info = await getVideoInfo(url, ytDlpPath);
+        console.log('Video info retrieved successfully');
 
-        res.json(info);
+        // 返回结果
+        res.status(200).json(info);
     } catch (error) {
-        console.error('处理失败:', error);
+        console.error('API Error:', error);
         res.status(500).json({
             error: error.message || '获取视频信息失败',
             details: process.env.NODE_ENV === 'development' ? error.stack : undefined

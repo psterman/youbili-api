@@ -228,11 +228,36 @@
             videoInfo.style.display = 'none';
 
             try {
-                const response = await fetch(`/api/video-info?url=${encodeURIComponent(videoUrl)}`);
-                const data = await response.json();
+                console.log('Sending request for URL:', videoUrl);
+                const response = await fetch('/api/video-info', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ url: videoUrl })
+                });
+
+                console.log('Response status:', response.status);
+                const contentType = response.headers.get('content-type');
+                console.log('Response content type:', contentType);
+
+                let data;
+                const text = await response.text();
+                console.log('Response text:', text);
+
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('服务器返回了无效的数据格式');
+                }
 
                 if (!response.ok) {
                     throw new Error(data.error || '获取视频信息失败');
+                }
+
+                if (!data || typeof data !== 'object') {
+                    throw new Error('返回的数据格式不正确');
                 }
 
                 // 显示视频信息
@@ -248,24 +273,27 @@
                     </div>
                     <div class="download-options">
                         <h3>下载选项</h3>
-                        ${data.formats.map(format => `
-                            <div class="download-option">
-                                <div class="format-info">
-                                    <span class="format-quality">${format.quality}</span>
-                                    <span class="format-details">
-                                        格式: ${format.format.toUpperCase()} | 
-                                        大小: ${format.size} | 
-                                        编码: ${format.vcodec || '未知'}
-                                    </span>
+                        ${data.formats && Array.isArray(data.formats) ?
+                        data.formats.map(format => `
+                                <div class="download-option">
+                                    <div class="format-info">
+                                        <span class="format-quality">${format.quality}</span>
+                                        <span class="format-details">
+                                            格式: ${format.format.toUpperCase()} | 
+                                            大小: ${format.size} | 
+                                            编码: ${format.vcodec || '未知'}
+                                        </span>
+                                    </div>
+                                    <a href="${format.url}" class="download-btn" target="_blank" download>下载</a>
                                 </div>
-                                <a href="${format.url}" class="download-btn" target="_blank" download>下载</a>
-                            </div>
-                        `).join('')}
+                            `).join('') : '<p>没有可用的下载选项</p>'
+                    }
                     </div>
                 `;
                 videoInfo.style.display = 'block';
             } catch (err) {
-                error.textContent = err.message;
+                console.error('Error:', err);
+                error.textContent = err.message || '获取视频信息失败，请稍后重试';
                 error.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
