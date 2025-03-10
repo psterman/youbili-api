@@ -6,7 +6,7 @@
     "main": "index.js",
     "scripts": {
         "dev": "vercel dev",
-        "build": "chmod +x install-yt-dlp.sh && ./install-yt-dlp.sh",
+        "build": "node api/_lib/install-yt-dlp.js",
         "vercel-build": "npm run build"
     },
     "dependencies": {

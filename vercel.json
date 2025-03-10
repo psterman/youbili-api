@@ -11,12 +11,14 @@
     ],
     "routes": [
         {
-            "src": "/api/video-info",
-            "dest": "/api/video-info.js"
+            "src": "/api/test-ytdlp",
+            "methods": ["GET"],
+            "dest": "api/test-ytdlp.js"
         },
         {
-            "src": "/api/test-ytdlp",
-            "dest": "/api/test-ytdlp.js"
+            "src": "/api/video-info",
+            "methods": ["GET"],
+            "dest": "api/video-info.js"
         },
         {
             "src": "/download/youtube/(?<videoId>[^/]+)/(?<quality>[^/]+)",
@@ -25,5 +27,11 @@
     ],
     "env": {
         "NODE_ENV": "production"
+    },
+    "functions": {
+        "api/**/*.js": {
+            "memory": 1024,
+            "maxDuration": 60
+        }
     }
 }
