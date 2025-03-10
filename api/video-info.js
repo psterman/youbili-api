@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
+import fetch from 'node-fetch';
 
 const execAsync = promisify(exec);
 
@@ -68,51 +69,88 @@ async function ensureYtDlp() {
     }
 }
 
-// 获取视频信息
-async function getVideoInfo(url) {
-    console.log('Getting video info for:', url);
-
+// 获取YouTube视频信息
+async function getYouTubeInfo(videoId) {
     try {
-        // 使用第三方 API 获取视频信息
-        const response = await fetch('https://co.wuk.sh/api/json', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                url: url,
-                vQuality: 'max'
-            })
-        });
+        // 使用 9xbuddy API
+        const response = await fetch(`https://9xbuddy.in/process?url=https://www.youtube.com/watch?v=${videoId}`);
+        const html = await response.text();
 
-        if (!response.ok) {
-            throw new Error('第三方 API 请求失败');
-        }
+        // 提取视频信息
+        const titleMatch = html.match(/<title>(.*?)<\/title>/);
+        const title = titleMatch ? titleMatch[1].replace(' - 9xBuddy', '') : '未知标题';
 
-        const data = await response.json();
-
-        // 构建返回数据
         return {
-            title: data.title || '未知标题',
-            thumbnail: data.thumb || '',
-            uploader: data.author || '未知上传者',
-            duration: data.duration || 0,
+            title,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+            uploader: 'YouTube',
+            duration: 0,
             formats: [
                 {
-                    quality: 'HD',
+                    quality: '1080p',
                     format: 'mp4',
-                    url: data.url,
+                    url: `https://9xbuddy.in/download?url=https://www.youtube.com/watch?v=${videoId}&quality=1080`,
+                    size: '自动检测',
+                    vcodec: 'h264',
+                    acodec: 'aac'
+                },
+                {
+                    quality: '720p',
+                    format: 'mp4',
+                    url: `https://9xbuddy.in/download?url=https://www.youtube.com/watch?v=${videoId}&quality=720`,
                     size: '自动检测',
                     vcodec: 'h264',
                     acodec: 'aac'
                 }
             ],
-            platform: data.platform || '未知平台',
-            originalUrl: url
+            platform: 'YouTube',
+            originalUrl: `https://www.youtube.com/watch?v=${videoId}`
         };
     } catch (error) {
-        console.error('Error getting video info:', error);
-        throw new Error('获取视频信息失败: ' + error.message);
+        console.error('YouTube info error:', error);
+        throw new Error('获取YouTube视频信息失败');
+    }
+}
+
+// 获取Bilibili视频信息
+async function getBilibiliInfo(videoId) {
+    try {
+        // 使用 Bilibili API
+        const response = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${videoId}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://www.bilibili.com'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.code !== 0) {
+            throw new Error(data.message || 'Bilibili API 返回错误');
+        }
+
+        const info = data.data;
+        return {
+            title: info.title,
+            thumbnail: info.pic,
+            uploader: info.owner?.name || '未知UP主',
+            duration: info.duration,
+            formats: [
+                {
+                    quality: '高清',
+                    format: 'mp4',
+                    url: `https://xbeibeix.com/api/bilibili/biliplayer/?url=https://www.bilibili.com/video/${videoId}`,
+                    size: '自动检测',
+                    vcodec: 'h264',
+                    acodec: 'aac'
+                }
+            ],
+            platform: 'Bilibili',
+            originalUrl: `https://www.bilibili.com/video/${videoId}`
+        };
+    } catch (error) {
+        console.error('Bilibili info error:', error);
+        throw new Error('获取B站视频信息失败');
     }
 }
 
@@ -144,11 +182,23 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: '请提供视频URL' });
         }
 
-        // 获取视频信息
-        const info = await getVideoInfo(url);
-        console.log('Video info retrieved successfully');
+        // 提取视频ID和平台信息
+        const videoInfo = extractVideoId(url);
+        if (!videoInfo) {
+            return res.status(400).json({ error: '不支持的视频链接格式' });
+        }
 
-        // 返回结果
+        // 根据平台获取视频信息
+        let info;
+        if (videoInfo.platform === 'youtube') {
+            info = await getYouTubeInfo(videoInfo.id);
+        } else if (videoInfo.platform === 'bilibili') {
+            info = await getBilibiliInfo(videoInfo.id);
+        } else {
+            return res.status(400).json({ error: '不支持的视频平台' });
+        }
+
+        console.log('Video info retrieved successfully');
         res.status(200).json(info);
     } catch (error) {
         console.error('API Error:', error);
